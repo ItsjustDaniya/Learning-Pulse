@@ -36,4 +36,4 @@ jobs:
           METABASE_USERNAME: ${{ secrets.METABASE_USERNAME }}
           METABASE_PASSWORD: ${{ secrets.METABASE_PASSWORD }}
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-        run: python sync_learning_pulse.py ${{ inputs.dry_run && '--dry-run' || '' }}
+        run: python -u sync_learning_pulse.py ${{ inputs.dry_run && '--dry-run' || '' }}
