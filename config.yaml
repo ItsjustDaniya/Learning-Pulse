@@ -1,42 +1,56 @@
 # Learning Pulse Live — Metabase -> Google Sheets sync
-# Fill in the Metabase question (card) ID for each tab.
-# The card ID is the number in the question URL: https://<metabase>/question/1234-nps-2026  ->  1234
-# Set a tab's card_id to null to skip it.
+# card_id = the Metabase question ID (the number in /question/1234-...). null = skip that tab.
+#
+# Date windows keep each tab inside what the sheet can hold:
+#   date_param  -> sets the question's own date filter (template tag) to the last N days
+#   keep_since  -> question has no date filter, so rows older than the cutoff are dropped after fetching
 
 spreadsheet_id: 1hUPN7r_iLYPgVQq4JyUfP9Bz4nWj8zgmIUGlc_S5EkM
 
 tabs:
-  # NPS: the sheet keeps all of 2026 here, including months that came from older exports.
-  # "append" adds only the rows that aren't there yet (matched on key_columns),
-  # so older months loaded by hand stay as they are.
+  # NPS — "New-NPS-Query" (Altius). Returns all history, so only 2026 is kept.
+  # append = adds only responses not already in the tab (one per student per month),
+  # so the months loaded by hand stay as they are and missing months get filled in.
   Raw_Dump:
-    card_id: null          # e.g. 1234
+    card_id: 9452
     mode: append
-    key_columns: [form_fill_date, user_id]
+    key_columns: ["month:form_fill_date", user_id]
+    keep_since: {column: form_fill_date, date: "2026-01-01"}
 
-  # Session tabs: cleared from row 2 and refilled on every run (header row rewritten too).
-  # Lecture_Dump holds about 16,000 rows, so keep that query to the period you report on (about 5 weeks).
+  # "Instructor-Rating - student-level-Lecture-level". Tab holds ~16,000 rows, so last 35 days.
   Lecture_Dump:
-    card_id: null
+    card_id: 11642
     mode: replace
-  Lecture_Feedback_Dump:   # can stay null if the Lecture_Dump query already has instructor_name etc.
-    card_id: null
+    date_param: {tag: Lecture_Date, days: 35}
+
+  # "Subjective Feedback - Student:Instructor Mapping"
+  Lecture_Feedback_Dump:
+    card_id: 5037
     mode: replace
+    date_param: {tag: Date, days: 35}
+
+  # "Data_Science_Mentor_help_doubt_session" (no date filter in the question)
   TA_Dump:
-    card_id: null
+    card_id: 6135
     mode: replace
+    keep_since: {column: start_timestamp, days: 70}
+
+  # Comes from the Looker TA Sessions table, not a Metabase question — left as is.
   TA_Looker_Dump:
     card_id: null
     mode: replace
+
+  # "DS - Mentor one -one Student Overlapping"
   Mentor_Sessions_Dump:
-    card_id: null
+    card_id: 6161
     mode: replace
+    date_param: {tag: Date, days: 70}
+
+  # "Mentor CSAT _DS" (no date filter in the question)
   Mentor_CSAT_Dump:
-    card_id: null
+    card_id: 6167
     mode: replace
+    keep_since: {column: date, days: 70}
 
 # Optional: rename Metabase columns to the header the sheet expects, per tab.
-# rename:
-#   Mentor_CSAT_Dump:
-#     csat_score: "CSAT score"
 rename: {}
