@@ -145,6 +145,25 @@ def keep_since(cols, rows, spec, tab):
     return [r for r in rows if key_part(r[i])[:10] >= cut]
 
 
+MONTHS = {m: i for i, m in enumerate(
+    ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
+TEXT_DATE = re.compile(r"^\s*(\d{1,2})[\s\-/]+([A-Za-z]{3,9})\.?[\s\-/,]*(\d{4})?\s*$")
+
+
+def text_date(v, year):
+    """'1 Sept ' / '12-Sep' / '3 September 2026' -> '2026-09-01'. Anything else is returned unchanged."""
+    if not isinstance(v, str):
+        return v
+    m = TEXT_DATE.match(v)
+    if not m or m.group(2)[:3].lower() not in MONTHS:
+        return v
+    y = int(m.group(3) or year)
+    try:
+        return dt.date(y, MONTHS[m.group(2)[:3].lower()], int(m.group(1))).isoformat()
+    except ValueError:
+        return v
+
+
 def split_key(k):
     """'month:form_fill_date' -> ('form_fill_date', True)"""
     return (k[6:], True) if k.startswith("month:") else (k, False)
@@ -191,9 +210,10 @@ def do_replace(ws, tab, cols, rows, dry):
     write_block(ws, 1, values)
 
 
-def do_append(ws, tab, cols, rows, key_cols, dry):
+def do_append(ws, tab, cols, rows, key_cols, dry, text_year=None):
     header = ws.row_values(1)
     check_headers(tab, header, cols)
+    text_year = text_year or dt.date.today().year
 
     # Map each sheet column to a Metabase column. Repeated headers (Raw_Dump has
     # placement_process twice) take name, then name_2 / name_3 ... if Metabase has them.
@@ -217,15 +237,37 @@ def do_append(ws, tab, cols, rows, key_cols, dry):
     kidx_sheet = [(header.index(k), m) for k, m in keys]
 
     def fmt(v, month):
-        v = key_part(v)
+        v = key_part(text_date(serial_to_date(v), text_year))
         return v[:7] if month else v
 
-    have = set()
-    last_filled = 1
+    # Existing rows: remember keys, and mark later repeats of the same key as duplicates.
+    have, dupes, last_filled = set(), [], 1
     for i, r in enumerate(existing, start=2):
-        if any(c not in ("", None) for c in r):
-            last_filled = i
-            have.add(tuple(fmt(serial_to_date(r[j]) if j < len(r) else "", m) for j, m in kidx_sheet))
+        if not any(c not in ("", None) for c in r):
+            continue
+        last_filled = i
+        key = tuple(fmt(r[j] if j < len(r) else "", m) for j, m in kidx_sheet)
+        if key in have:
+            dupes.append(i)
+        have.add(key)
+
+    if dupes:
+        print(f"  {tab}: removing {len(dupes)} duplicate rows already in the tab (same {key_cols}), keeping the first")
+        if not dry:
+            # group into contiguous blocks and delete bottom-up so row numbers stay valid
+            blocks, start, prev = [], dupes[0], dupes[0]
+            for d in dupes[1:]:
+                if d == prev + 1:
+                    prev = d
+                    continue
+                blocks.append((start, prev))
+                start = prev = d
+            blocks.append((start, prev))
+            reqs = [{"deleteDimension": {"range": {"sheetId": ws.id, "dimension": "ROWS",
+                                                   "startIndex": a - 1, "endIndex": b}}}
+                    for a, b in sorted(blocks, reverse=True)]
+            ws.spreadsheet.batch_update({"requests": reqs})
+        last_filled -= len(dupes)
 
     kidx_mb = [(cols.index(k), m) for k, m in keys]
     new_rows = []
@@ -288,7 +330,7 @@ def main():
             ws = sh.worksheet(tab)
             cols, rows = fetched[tab]
             if c.get("mode", "replace") == "append":
-                do_append(ws, tab, cols, rows, c.get("key_columns") or [], args.dry_run)
+                do_append(ws, tab, cols, rows, c.get("key_columns") or [], args.dry_run, c.get("text_date_year"))
             else:
                 do_replace(ws, tab, cols, rows, args.dry_run)
         except Exception as e:  # keep going with the other tabs, fail the run at the end
