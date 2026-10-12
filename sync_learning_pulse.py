@@ -53,12 +53,13 @@ class Metabase:
             r.raise_for_status()
             self.s.headers["X-Metabase-Session"] = r.json()["id"]
 
-    def card_rows(self, card_id):
+    def card_rows(self, card_id, parameters=None):
         """All rows of a saved question as (columns, rows). Uses the export endpoint (no 2,000-row cap)."""
         url = f"{self.base}/api/card/{card_id}/query/json"
-        r = self.s.post(url, data={"parameters": "[]", "format_rows": "false"}, timeout=900)
+        params = parameters or []
+        r = self.s.post(url, data={"parameters": json.dumps(params), "format_rows": "false"}, timeout=900)
         if r.status_code >= 400:  # newer Metabase versions also accept a JSON body
-            r = self.s.post(url, json={"parameters": [], "format_rows": False}, timeout=900)
+            r = self.s.post(url, json={"parameters": params, "format_rows": False}, timeout=900)
         r.raise_for_status()
         data = r.json()
         if isinstance(data, dict) and ("error" in data or "message" in data):
@@ -102,6 +103,39 @@ def key_part(v):
         return str(int(f)) if f.is_integer() else s
     except ValueError:
         return s
+
+
+def cutoff_date(spec):
+    """{'days': 35} -> date 35 days ago; {'date': '2026-01-01'} -> that date. Returns 'YYYY-MM-DD'."""
+    if spec.get("date"):
+        return str(spec["date"])
+    return (dt.date.today() - dt.timedelta(days=int(spec["days"]))).isoformat()
+
+
+def build_parameters(spec):
+    """Metabase date filter (field-filter template tag) for the last N days, up to today."""
+    if not spec:
+        return []
+    return [{
+        "type": "date/range",
+        "target": ["dimension", ["template-tag", spec["tag"]]],
+        "value": f"{cutoff_date(spec)}~{dt.date.today().isoformat()}",
+    }]
+
+
+def keep_since(cols, rows, spec, tab):
+    """Drop rows older than the cutoff, judged on one date column."""
+    if not spec:
+        return rows
+    if spec["column"] not in cols:
+        sys.exit(f"{tab}: keep_since column '{spec['column']}' not in the Metabase result")
+    i, cut = cols.index(spec["column"]), cutoff_date(spec)
+    return [r for r in rows if key_part(r[i])[:10] >= cut]
+
+
+def split_key(k):
+    """'month:form_fill_date' -> ('form_fill_date', True)"""
+    return (k[6:], True) if k.startswith("month:") else (k, False)
 
 
 def serial_to_date(v):
@@ -158,7 +192,8 @@ def do_append(ws, tab, cols, rows, key_cols, dry):
         cand = h if n == 1 else f"{h}_{n}"
         src.append(cols.index(cand) if cand in cols else None)
 
-    for k in key_cols:
+    keys = [split_key(k) for k in key_cols]
+    for k, _ in keys:
         if k not in header or k not in cols:
             sys.exit(f"{tab}: key column '{k}' must be in both the sheet header and the Metabase result")
 
@@ -167,18 +202,23 @@ def do_append(ws, tab, cols, rows, key_cols, dry):
         value_render_option="UNFORMATTED_VALUE",
         date_time_render_option="SERIAL_NUMBER",
     )
-    kidx_sheet = [header.index(k) for k in key_cols]
+    kidx_sheet = [(header.index(k), m) for k, m in keys]
+
+    def fmt(v, month):
+        v = key_part(v)
+        return v[:7] if month else v
+
     have = set()
     last_filled = 1
     for i, r in enumerate(existing, start=2):
         if any(c not in ("", None) for c in r):
             last_filled = i
-            have.add(tuple(key_part(serial_to_date(r[j]) if j < len(r) else "") for j in kidx_sheet))
+            have.add(tuple(fmt(serial_to_date(r[j]) if j < len(r) else "", m) for j, m in kidx_sheet))
 
-    kidx_mb = [cols.index(k) for k in key_cols]
+    kidx_mb = [(cols.index(k), m) for k, m in keys]
     new_rows = []
     for r in rows:
-        key = tuple(key_part(r[j]) for j in kidx_mb)
+        key = tuple(fmt(r[j], m) for j, m in kidx_mb)
         if key in have:
             continue
         have.add(key)
@@ -214,7 +254,8 @@ def main():
     fetched = {}
     for tab, c in tabs.items():
         print(f"Fetching card {c['card_id']} for {tab} ...")
-        cols, rows = mb.card_rows(c["card_id"])
+        cols, rows = mb.card_rows(c["card_id"], build_parameters(c.get("date_param")))
+        rows = keep_since(cols, rows, c.get("keep_since"), tab)
         ren = (cfg.get("rename") or {}).get(tab) or {}
         cols = [ren.get(x, x) for x in cols]
         cap = CAPACITY.get(tab)
