@@ -5,7 +5,7 @@
 #   date_param  -> sets the question's own date filter (template tag) to the last N days
 #   keep_since  -> question has no date filter, so rows older than the cutoff are dropped after fetching
 
-spreadsheet_id: 1hUPN7r_iLYPgVQq4JyUfP9Bz4nWj8zgmIUGlc_S5EkM
+spreadsheet_id: 1CG7q7a2UVvR3FJ65q6b6BeBuYFuqxXXoUrcpIx5BlTc
 
 tabs:
   # NPS — "New-NPS-Query" (Altius). Returns all history, so only 2026 is kept.
