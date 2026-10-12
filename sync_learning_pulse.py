@@ -147,7 +147,8 @@ def keep_since(cols, rows, spec, tab):
 
 MONTHS = {m: i for i, m in enumerate(
     ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"], start=1)}
-TEXT_DATE = re.compile(r"^\s*(\d{1,2})[\s\-/]+([A-Za-z]{3,9})\.?[\s\-/,]*(\d{4})?\s*$")
+TEXT_DATE = re.compile(
+    r"^\s*(\d{1,2})[\s\-/]+([A-Za-z]{3,9})\.?[\s\-/,]*(\d{4})?(?:[,\s]+\d{1,2}:\d{2}(?::\d{2})?\s*([AaPp][Mm])?)?\s*$")
 
 
 def text_date(v, year):
