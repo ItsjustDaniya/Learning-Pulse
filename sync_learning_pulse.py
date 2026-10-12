@@ -262,11 +262,17 @@ def main():
     sh = gspread.authorize(creds).open_by_key(cfg["spreadsheet_id"])
     mb = Metabase()
 
-    # Fetch everything first, so a failed query never leaves the sheet half-updated.
-    fetched = {}
+    # Fetch everything first, so a failed query never leaves a tab half-updated.
+    # A tab whose query fails is skipped; the other tabs still update.
+    fetched, failures = {}, []
     for tab, c in tabs.items():
-        print(f"Fetching card {c['card_id']} for {tab} ...")
-        cols, rows = mb.card_rows(c["card_id"], c.get("date_param"))
+        print(f"Fetching card {c['card_id']} for {tab} ...", flush=True)
+        try:
+            cols, rows = mb.card_rows(c["card_id"], c.get("date_param"))
+        except Exception as e:
+            failures.append(tab)
+            print(f"  X {tab}: {str(e)[:500]}", flush=True)
+            continue
         rows = keep_since(cols, rows, c.get("keep_since"), tab)
         ren = (cfg.get("rename") or {}).get(tab) or {}
         cols = [ren.get(x, x) for x in cols]
@@ -275,8 +281,9 @@ def main():
             print(f"  ! {tab}: {len(rows)} rows but the sheet only reads {cap} — narrow the query's date range")
         fetched[tab] = (cols, rows)
 
-    failures = []
     for tab, c in tabs.items():
+        if tab not in fetched:
+            continue
         try:
             ws = sh.worksheet(tab)
             cols, rows = fetched[tab]
