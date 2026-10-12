@@ -53,14 +53,37 @@ class Metabase:
             r.raise_for_status()
             self.s.headers["X-Metabase-Session"] = r.json()["id"]
 
-    def card_rows(self, card_id, parameters=None):
+    def card_parameters(self, card_id, spec):
+        """Build the date filter using the question's own parameter definition (id, type, target)."""
+        if not spec:
+            return []
+        r = self.s.get(f"{self.base}/api/card/{card_id}", timeout=120)
+        r.raise_for_status()
+        card = r.json()
+        tag = spec["tag"]
+        target = ["dimension", ["template-tag", tag]]
+        p = next((x for x in card.get("parameters") or []
+                  if x.get("target") == target or x.get("slug") == tag.lower() or x.get("name") == tag), None)
+        if p is None:  # fall back to the template tag itself
+            native = (card.get("dataset_query") or {}).get("native") or {}
+            t = (native.get("template-tags") or {}).get(tag)
+            if not t:
+                tags = list((native.get("template-tags") or {}).keys())
+                raise RuntimeError(f"Card {card_id}: no filter named '{tag}'. Filters on this question: {tags}")
+            p = {"id": t.get("id"), "type": t.get("widget-type") or "date/all-options", "target": target}
+        value = f"{cutoff_date(spec)}~{dt.date.today().isoformat()}"
+        return [{"id": p["id"], "type": p.get("type") or "date/all-options",
+                 "target": p.get("target") or target, "value": value}]
+
+    def card_rows(self, card_id, date_spec=None):
         """All rows of a saved question as (columns, rows). Uses the export endpoint (no 2,000-row cap)."""
         url = f"{self.base}/api/card/{card_id}/query/json"
-        params = parameters or []
+        params = self.card_parameters(card_id, date_spec)
         r = self.s.post(url, data={"parameters": json.dumps(params), "format_rows": "false"}, timeout=900)
         if r.status_code >= 400:  # newer Metabase versions also accept a JSON body
             r = self.s.post(url, json={"parameters": params, "format_rows": False}, timeout=900)
-        r.raise_for_status()
+        if r.status_code >= 400:
+            raise RuntimeError(f"Metabase card {card_id} -> HTTP {r.status_code}: {r.text[:800]}")
         data = r.json()
         if isinstance(data, dict) and ("error" in data or "message" in data):
             raise RuntimeError(f"Metabase card {card_id} failed: {data.get('error') or data.get('message')}")
@@ -110,17 +133,6 @@ def cutoff_date(spec):
     if spec.get("date"):
         return str(spec["date"])
     return (dt.date.today() - dt.timedelta(days=int(spec["days"]))).isoformat()
-
-
-def build_parameters(spec):
-    """Metabase date filter (field-filter template tag) for the last N days, up to today."""
-    if not spec:
-        return []
-    return [{
-        "type": "date/range",
-        "target": ["dimension", ["template-tag", spec["tag"]]],
-        "value": f"{cutoff_date(spec)}~{dt.date.today().isoformat()}",
-    }]
 
 
 def keep_since(cols, rows, spec, tab):
@@ -254,7 +266,7 @@ def main():
     fetched = {}
     for tab, c in tabs.items():
         print(f"Fetching card {c['card_id']} for {tab} ...")
-        cols, rows = mb.card_rows(c["card_id"], build_parameters(c.get("date_param")))
+        cols, rows = mb.card_rows(c["card_id"], c.get("date_param"))
         rows = keep_since(cols, rows, c.get("keep_since"), tab)
         ren = (cfg.get("rename") or {}).get(tab) or {}
         cols = [ren.get(x, x) for x in cols]
