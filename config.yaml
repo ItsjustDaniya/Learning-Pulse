@@ -1,0 +1,42 @@
+# Learning Pulse Live — Metabase -> Google Sheets sync
+# Fill in the Metabase question (card) ID for each tab.
+# The card ID is the number in the question URL: https://<metabase>/question/1234-nps-2026  ->  1234
+# Set a tab's card_id to null to skip it.
+
+spreadsheet_id: 1hUPN7r_iLYPgVQq4JyUfP9Bz4nWj8zgmIUGlc_S5EkM
+
+tabs:
+  # NPS: the sheet keeps all of 2026 here, including months that came from older exports.
+  # "append" adds only the rows that aren't there yet (matched on key_columns),
+  # so older months loaded by hand stay as they are.
+  Raw_Dump:
+    card_id: null          # e.g. 1234
+    mode: append
+    key_columns: [form_fill_date, user_id]
+
+  # Session tabs: cleared from row 2 and refilled on every run (header row rewritten too).
+  # Lecture_Dump holds about 16,000 rows, so keep that query to the period you report on (about 5 weeks).
+  Lecture_Dump:
+    card_id: null
+    mode: replace
+  Lecture_Feedback_Dump:   # can stay null if the Lecture_Dump query already has instructor_name etc.
+    card_id: null
+    mode: replace
+  TA_Dump:
+    card_id: null
+    mode: replace
+  TA_Looker_Dump:
+    card_id: null
+    mode: replace
+  Mentor_Sessions_Dump:
+    card_id: null
+    mode: replace
+  Mentor_CSAT_Dump:
+    card_id: null
+    mode: replace
+
+# Optional: rename Metabase columns to the header the sheet expects, per tab.
+# rename:
+#   Mentor_CSAT_Dump:
+#     csat_score: "CSAT score"
+rename: {}
