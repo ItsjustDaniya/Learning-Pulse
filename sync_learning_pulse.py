@@ -307,22 +307,9 @@ def do_append(ws, tab, cols, rows, key_cols, dry, text_year=None):
         have.add(key)
 
     if dupes:
-        print(f"  {tab}: removing {len(dupes)} duplicate rows already in the tab (same {key_cols}), keeping the first")
-        if not dry:
-            # group into contiguous blocks and delete bottom-up so row numbers stay valid
-            blocks, start, prev = [], dupes[0], dupes[0]
-            for d in dupes[1:]:
-                if d == prev + 1:
-                    prev = d
-                    continue
-                blocks.append((start, prev))
-                start = prev = d
-            blocks.append((start, prev))
-            reqs = [{"deleteDimension": {"range": {"sheetId": ws.id, "dimension": "ROWS",
-                                                   "startIndex": a - 1, "endIndex": b}}}
-                    for a, b in sorted(blocks, reverse=True)]
-            ws.spreadsheet.batch_update({"requests": reqs})
-        last_filled -= len(dupes)
+        # Never delete rows: the *_Clean tabs read each dump row by row (Raw_Clean row N -> Raw_Dump!$AN:$AZN),
+        # so deleting a dump row turns those formulas into #REF!. The sheet already counts a student once a month.
+        print(f"  {tab}: {len(dupes)} rows already in the tab repeat {key_cols} — left as they are")
 
     kidx_mb = [(cols.index(k), m) for k, m in keys]
     new_rows = []
