@@ -14,10 +14,10 @@ All 7 dump tabs are automated — nothing needs pasting by hand any more.
 | Tab | Source |
 |---|---|
 | Raw_Dump | card 9452 "New-NPS-Query" (Altius) |
-| Lecture_Dump | card 11642 "Instructor-Rating - student-level-Lecture-level" (last 35 days) |
+| Lecture_Dump | card 11642 "Instructor-Rating - student-level-Lecture-level" (last 30 days) |
 | Lecture_Feedback_Dump | card 5037 "Subjective Feedback - Student:Instructor Mapping" (last 35 days) |
 | TA_Dump | card 6135 "Data_Science_Mentor_help_doubt_session" (last 70 days) |
-| TA_Looker_Dump | `sql/ta_looker_dump.sql` run directly on Newton School (db 4) — replaces the Looker TA Sessions export (last 70 days) |
+| TA_Looker_Dump | card 6570 "TA-2 -NewQuery" — the query behind the Looker TA Sessions table (last 70 days) |
 | Mentor_Sessions_Dump | card 6161 "DS - Mentor one -one Student Overlapping" (last 70 days) |
 | Mentor_CSAT_Dump | card 6167 "Mentor CSAT _DS" (last 70 days) |
 

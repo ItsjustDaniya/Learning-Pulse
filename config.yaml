@@ -18,11 +18,12 @@ tabs:
     keep_since: {column: form_fill_date, date: "2026-01-01"}
     text_date_year: 2026   # year for text dates like "1 Sept " (September's manual export)
 
-  # "Instructor-Rating - student-level-Lecture-level". Tab holds ~16,000 rows, so last 35 days.
+  # "Instructor-Rating - student-level-Lecture-level". Lecture_Clean reads 16,000 rows;
+  # 35 days was ~18,000 rows (Oct 2026), so last 30 days.
   Lecture_Dump:
     card_id: 11642
     mode: replace
-    date_param: {tag: Lecture_Date, days: 35}
+    date_param: {tag: Lecture_Date, days: 30}
 
   # "Subjective Feedback - Student:Instructor Mapping"
   Lecture_Feedback_Dump:
@@ -36,14 +37,21 @@ tabs:
     mode: replace
     keep_since: {column: start_timestamp, days: 70}
 
-  # Used to be pasted from the Looker TA Sessions table. Now built straight from Metabase
-  # with sql/ta_looker_dump.sql (same logic as card 13444, same columns + status labels as Looker).
-  # Same 70-day window as TA_Dump so every TA_Dump session finds its Looker status/duration.
+  # Used to be pasted from the Looker TA Sessions table, which was built from card 6570
+  # "TA-2 -NewQuery". TA_Clean reads only session_id, session_status, over_lap_time_in_minute.
+  # Same 70-day window as TA_Dump so every TA_Dump session finds its status/duration.
+  # (sql/ta_looker_dump.sql is a fuller version with every Looker column; it needs an API key
+  #  allowed to run ad-hoc SQL, or save it as a question and put its id here.)
   TA_Looker_Dump:
-    sql_file: sql/ta_looker_dump.sql
-    database_id: 4          # Newton School
-    since: {days: 70}       # fills {{since}} in the SQL
+    card_id: 6570
     mode: replace
+    date_param: {tag: date, days: 70}
+    value_map:
+      session_status:
+        Student_did_not_join: Not conducted - Student No show
+        Mentor_did_not_join: Not conducted - Interviewer No show
+        Student did not join: Not conducted - Student No show
+        TA did not join: Not conducted - Interviewer No show
 
   # "DS - Mentor one -one Student Overlapping"
   Mentor_Sessions_Dump:
@@ -66,4 +74,6 @@ tabs:
 # Optional: rename Metabase columns to the header the sheet expects, per tab.
 rename:
   Mentor_Sessions_Dump:
+    batch: Batch
+  TA_Looker_Dump:
     batch: Batch
