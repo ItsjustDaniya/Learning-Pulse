@@ -9,6 +9,23 @@ once a day at **06:47 IST**. Every other tab (Dashboard, MBR View, Slack Report,
 | Raw_Dump (NPS) | `append` | Adds only rows not already there (matched on `form_fill_date` + `user_id`). Older months loaded by hand stay as they are. |
 | Lecture_Dump, Lecture_Feedback_Dump, TA_Dump, TA_Looker_Dump, Mentor_Sessions_Dump, Mentor_CSAT_Dump | `replace` | Cleared and rewritten (header + rows) every run. |
 
+All 7 dump tabs are automated — nothing needs pasting by hand any more.
+
+| Tab | Source |
+|---|---|
+| Raw_Dump | card 9452 "New-NPS-Query" (Altius) |
+| Lecture_Dump | card 11642 "Instructor-Rating - student-level-Lecture-level" (last 35 days) |
+| Lecture_Feedback_Dump | card 5037 "Subjective Feedback - Student:Instructor Mapping" (last 35 days) |
+| TA_Dump | card 6135 "Data_Science_Mentor_help_doubt_session" (last 70 days) |
+| TA_Looker_Dump | `sql/ta_looker_dump.sql` run directly on Newton School (db 4) — replaces the Looker TA Sessions export (last 70 days) |
+| Mentor_Sessions_Dump | card 6161 "DS - Mentor one -one Student Overlapping" (last 70 days) |
+| Mentor_CSAT_Dump | card 6167 "Mentor CSAT _DS" (last 70 days) |
+
+A tab can come from a saved question (`card_id:`) or from a SQL file in this repo
+(`sql_file:` + `database_id:`; `{{since}}` in the SQL is filled from `since: {days: N}`).
+`value_map:` rewrites values after fetching — used to turn the mentor card's
+`Student_did_not_join` / `Mentor_did_not_join` into the statuses the sheet's status map knows.
+
 ## Setup
 
 1. **Repo** — copy these files in (keep `.github/workflows/` as is).

@@ -75,6 +75,26 @@ class Metabase:
         return [{"id": p["id"], "type": p.get("type") or "date/all-options",
                  "target": p.get("target") or target, "value": value}]
 
+    def native_rows(self, database_id, sql):
+        """Run a SQL file straight through Metabase (no saved question needed). Export endpoint, so no 2,000-row cap."""
+        q = {"database": int(database_id), "type": "native", "native": {"query": sql, "template-tags": {}}}
+        url = f"{self.base}/api/dataset/json"
+        r = self.s.post(url, data={"query": json.dumps(q), "format_rows": "false"}, timeout=900)
+        if r.status_code >= 400:
+            r = self.s.post(url, json={"query": q, "format_rows": False}, timeout=900)
+        return self._rows(r, f"SQL on database {database_id}")
+
+    def _rows(self, r, label):
+        if r.status_code >= 400:
+            raise RuntimeError(f"Metabase {label} -> HTTP {r.status_code}: {r.text[:800]}")
+        data = r.json()
+        if isinstance(data, dict) and ("error" in data or "message" in data):
+            raise RuntimeError(f"Metabase {label} failed: {data.get('error') or data.get('message')}")
+        if not data:
+            return [], []
+        cols = list(data[0].keys())
+        return cols, [[rec.get(c) for c in cols] for rec in data]
+
     def card_rows(self, card_id, date_spec=None):
         """All rows of a saved question as (columns, rows). Uses the export endpoint (no 2,000-row cap)."""
         url = f"{self.base}/api/card/{card_id}/query/json"
@@ -82,15 +102,31 @@ class Metabase:
         r = self.s.post(url, data={"parameters": json.dumps(params), "format_rows": "false"}, timeout=900)
         if r.status_code >= 400:  # newer Metabase versions also accept a JSON body
             r = self.s.post(url, json={"parameters": params, "format_rows": False}, timeout=900)
-        if r.status_code >= 400:
-            raise RuntimeError(f"Metabase card {card_id} -> HTTP {r.status_code}: {r.text[:800]}")
-        data = r.json()
-        if isinstance(data, dict) and ("error" in data or "message" in data):
-            raise RuntimeError(f"Metabase card {card_id} failed: {data.get('error') or data.get('message')}")
-        if not data:
-            return [], []
-        cols = list(data[0].keys())
-        return cols, [[rec.get(c) for c in cols] for rec in data]
+        return self._rows(r, f"card {card_id}")
+
+
+def load_sql(path, since_spec):
+    """Read a .sql file and fill {{since}} with the cutoff date."""
+    full = path if os.path.isabs(path) else os.path.join(os.path.dirname(os.path.abspath(__file__)), path)
+    sql = open(full, encoding="utf-8").read()
+    if "{{since}}" in sql:
+        if not since_spec:
+            sys.exit(f"{path} uses {{{{since}}}} but no since: is set in config.yaml")
+        sql = sql.replace("{{since}}", cutoff_date(since_spec))
+    return sql
+
+
+def apply_value_map(cols, rows, vmap, tab):
+    """{'session_status': {'old': 'new'}} -> rewrite those values in place."""
+    for col, mapping in (vmap or {}).items():
+        if col not in cols:
+            print(f"  ! {tab}: value_map column '{col}' not in the result")
+            continue
+        i = cols.index(col)
+        for r in rows:
+            if r[i] in mapping:
+                r[i] = mapping[r[i]]
+    return rows
 
 
 # ---------------------------------------------------------------- value cleaning
@@ -294,9 +330,12 @@ def main():
     args = ap.parse_args()
 
     cfg = yaml.safe_load(open(args.config))
-    tabs = {t: c for t, c in cfg["tabs"].items() if c and c.get("card_id")}
+    tabs = {t: c for t, c in cfg["tabs"].items() if c and (c.get("card_id") or c.get("sql_file"))}
     if not tabs:
-        sys.exit("No card_id filled in config.yaml — nothing to sync.")
+        sys.exit("No card_id / sql_file filled in config.yaml — nothing to sync.")
+    skipped = [t for t in cfg["tabs"] if t not in tabs]
+    if skipped:
+        print(f"Not automated (no card_id / sql_file): {skipped}")
 
     creds = Credentials.from_service_account_info(
         json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]),
@@ -309,14 +348,19 @@ def main():
     # A tab whose query fails is skipped; the other tabs still update.
     fetched, failures = {}, []
     for tab, c in tabs.items():
-        print(f"Fetching card {c['card_id']} for {tab} ...", flush=True)
+        src = f"card {c['card_id']}" if c.get("card_id") else c["sql_file"]
+        print(f"Fetching {src} for {tab} ...", flush=True)
         try:
-            cols, rows = mb.card_rows(c["card_id"], c.get("date_param"))
+            if c.get("card_id"):
+                cols, rows = mb.card_rows(c["card_id"], c.get("date_param"))
+            else:
+                cols, rows = mb.native_rows(c["database_id"], load_sql(c["sql_file"], c.get("since")))
         except Exception as e:
             failures.append(tab)
             print(f"  X {tab}: {str(e)[:500]}", flush=True)
             continue
         rows = keep_since(cols, rows, c.get("keep_since"), tab)
+        rows = apply_value_map(cols, rows, c.get("value_map"), tab)
         ren = (cfg.get("rename") or {}).get(tab) or {}
         cols = [ren.get(x, x) for x in cols]
         cap = CAPACITY.get(tab)

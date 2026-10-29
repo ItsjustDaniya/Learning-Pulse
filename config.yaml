@@ -36,9 +36,13 @@ tabs:
     mode: replace
     keep_since: {column: start_timestamp, days: 70}
 
-  # Comes from the Looker TA Sessions table, not a Metabase question — left as is.
+  # Used to be pasted from the Looker TA Sessions table. Now built straight from Metabase
+  # with sql/ta_looker_dump.sql (same logic as card 13444, same columns + status labels as Looker).
+  # Same 70-day window as TA_Dump so every TA_Dump session finds its Looker status/duration.
   TA_Looker_Dump:
-    card_id: null
+    sql_file: sql/ta_looker_dump.sql
+    database_id: 4          # Newton School
+    since: {days: 70}       # fills {{since}} in the SQL
     mode: replace
 
   # "DS - Mentor one -one Student Overlapping"
@@ -46,6 +50,12 @@ tabs:
     card_id: 6161
     mode: replace
     date_param: {tag: Date, days: 70}
+    # The card can return two statuses the sheet's status map (Session_Settings E:F) doesn't know,
+    # which would count as "Pending". Map them to the Looker wording the sheet expects.
+    value_map:
+      session_status:
+        Student_did_not_join: Not conducted - Student No show
+        Mentor_did_not_join: Not conducted - Interviewer No show
 
   # "Mentor CSAT _DS" (no date filter in the question)
   Mentor_CSAT_Dump:
