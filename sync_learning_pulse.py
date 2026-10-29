@@ -359,7 +359,11 @@ def main():
         json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT_JSON"]),
         scopes=["https://www.googleapis.com/auth/spreadsheets"],
     )
-    sh = gspread.authorize(creds).open_by_key(cfg["spreadsheet_id"])
+    try:
+        sh = gspread.authorize(creds).open_by_key(cfg["spreadsheet_id"])
+    except PermissionError:
+        sys.exit(f"The service account {creds.service_account_email} can't open sheet "
+                 f"{cfg['spreadsheet_id']} — share the sheet with it as Editor.")
     mb = Metabase()
 
     # Fetch everything first, so a failed query never leaves a tab half-updated.
