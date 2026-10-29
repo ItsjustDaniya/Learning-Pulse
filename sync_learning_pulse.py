@@ -37,6 +37,24 @@ WRITE_CHUNK = 5000  # rows per Sheets API update call
 ISO_DT = re.compile(r"^(\d{4}-\d{2}-\d{2})T(\d{2}:\d{2}:\d{2})(\.\d+)?(Z|[+-]\d{2}:\d{2})?$")
 
 
+def _gh(msg):
+    """One-line, %-escaped text for a GitHub Actions annotation."""
+    return str(msg).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+
+
+def warn(msg):
+    """Log line + a warning annotation on the GitHub Actions run page."""
+    print(f"  ! {msg}", flush=True)
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::warning::{_gh(msg)}", flush=True)
+
+
+def error(msg):
+    print(f"  X {msg}", flush=True)
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::error::{_gh(msg)}", flush=True)
+
+
 # ---------------------------------------------------------------- Metabase
 class Metabase:
     def __init__(self):
@@ -120,7 +138,7 @@ def apply_value_map(cols, rows, vmap, tab):
     """{'session_status': {'old': 'new'}} -> rewrite those values in place."""
     for col, mapping in (vmap or {}).items():
         if col not in cols:
-            print(f"  ! {tab}: value_map column '{col}' not in the result")
+            warn(f"{tab}: value_map column '{col}' not in the result")
             continue
         i = cols.index(col)
         for r in rows:
@@ -229,14 +247,14 @@ def write_block(ws, start_row, values):
 def check_headers(tab, sheet_header, mb_cols):
     missing = [h for h in sheet_header if h and h not in mb_cols]
     if missing:
-        print(f"  ! {tab}: sheet expects columns not in the Metabase result: {missing}")
+        warn(f"{tab}: sheet expects columns not in the Metabase result: {missing}")
 
 
 def do_replace(ws, tab, cols, rows, dry):
     sheet_header = [h for h in ws.row_values(1)]
     check_headers(tab, sheet_header, cols)
     if not rows:
-        print(f"  ! {tab}: query returned 0 rows — leaving the tab untouched")
+        warn(f"{tab}: query returned 0 rows — leaving the tab untouched")
         return
     values = [cols] + [[clean(v) for v in r] for r in rows]
     print(f"  {tab}: replace with {len(rows)} rows x {len(cols)} cols")
@@ -357,7 +375,7 @@ def main():
                 cols, rows = mb.native_rows(c["database_id"], load_sql(c["sql_file"], c.get("since")))
         except Exception as e:
             failures.append(tab)
-            print(f"  X {tab}: {str(e)[:500]}", flush=True)
+            error(f"{tab}: {str(e)[:500]}")
             continue
         rows = keep_since(cols, rows, c.get("keep_since"), tab)
         rows = apply_value_map(cols, rows, c.get("value_map"), tab)
@@ -365,7 +383,7 @@ def main():
         cols = [ren.get(x, x) for x in cols]
         cap = CAPACITY.get(tab)
         if cap and len(rows) > cap and c.get("mode") != "append":
-            print(f"  ! {tab}: {len(rows)} rows but the sheet only reads {cap} — narrow the query's date range")
+            warn(f"{tab}: {len(rows)} rows but the sheet only reads {cap} — narrow the query's date range")
         fetched[tab] = (cols, rows)
 
     for tab, c in tabs.items():
@@ -380,7 +398,7 @@ def main():
                 do_replace(ws, tab, cols, rows, args.dry_run)
         except Exception as e:  # keep going with the other tabs, fail the run at the end
             failures.append(tab)
-            print(f"  X {tab}: {e}")
+            error(f"{tab}: {str(e)[:500]}")
 
     if failures:
         sys.exit(f"Failed tabs: {failures}")
@@ -388,4 +406,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except SystemExit as e:
+        if e.code not in (None, 0) and not isinstance(e.code, int):
+            error(e.code)
+        raise
+    except Exception as e:  # show the reason on the run page, not only in the log
+        error(f"{type(e).__name__}: {e}")
+        raise
