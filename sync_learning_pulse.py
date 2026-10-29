@@ -49,6 +49,13 @@ def warn(msg):
         print(f"::warning::{_gh(msg)}", flush=True)
 
 
+def note(msg):
+    """Log line + a notice annotation (per-tab summary on the run page)."""
+    print(f"  {msg}", flush=True)
+    if os.environ.get("GITHUB_ACTIONS"):
+        print(f"::notice::{_gh(msg)}", flush=True)
+
+
 def error(msg):
     print(f"  X {msg}", flush=True)
     if os.environ.get("GITHUB_ACTIONS"):
@@ -257,7 +264,7 @@ def do_replace(ws, tab, cols, rows, dry):
         warn(f"{tab}: query returned 0 rows — leaving the tab untouched")
         return
     values = [cols] + [[clean(v) for v in r] for r in rows]
-    print(f"  {tab}: replace with {len(rows)} rows x {len(cols)} cols")
+    note(f"{tab}: replace with {len(rows)} rows x {len(cols)} cols")
     if dry:
         return
     ensure_size(ws, len(values) + 1, len(cols))
@@ -309,7 +316,7 @@ def do_append(ws, tab, cols, rows, key_cols, dry, text_year=None):
     if dupes:
         # Never delete rows: the *_Clean tabs read each dump row by row (Raw_Clean row N -> Raw_Dump!$AN:$AZN),
         # so deleting a dump row turns those formulas into #REF!. The sheet already counts a student once a month.
-        print(f"  {tab}: {len(dupes)} rows already in the tab repeat {key_cols} — left as they are")
+        note(f"{tab}: {len(dupes)} rows already in the tab repeat {key_cols} — left as they are")
 
     kidx_mb = [(cols.index(k), m) for k, m in keys]
     new_rows = []
@@ -320,7 +327,7 @@ def do_append(ws, tab, cols, rows, key_cols, dry, text_year=None):
         have.add(key)
         new_rows.append([clean(r[j]) if j is not None else "" for j in src])
 
-    print(f"  {tab}: {len(rows)} rows in Metabase, {len(new_rows)} new to append after row {last_filled}")
+    note(f"{tab}: {len(rows)} rows in Metabase, {len(new_rows)} new to append after row {last_filled}")
     if not new_rows or dry:
         return
     ensure_size(ws, last_filled + len(new_rows) + 1, len(header))
