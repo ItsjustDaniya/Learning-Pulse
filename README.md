@@ -14,7 +14,7 @@ All 7 dump tabs are automated — nothing needs pasting by hand any more.
 | Tab | Source |
 |---|---|
 | Raw_Dump | card 9452 "New-NPS-Query" (Altius) |
-| Lecture_Dump | card 11642 "Instructor-Rating - student-level-Lecture-level" (last 30 days) |
+| Lecture_Dump | card 11642 "Instructor-Rating - student-level-Lecture-level" (last 29 days) |
 | Lecture_Feedback_Dump | card 5037 "Subjective Feedback - Student:Instructor Mapping" (last 35 days) |
 | TA_Dump | card 6135 "Data_Science_Mentor_help_doubt_session" (last 70 days) |
 | TA_Looker_Dump | card 6570 "TA-2 -NewQuery" — the query behind the Looker TA Sessions table (last 70 days) |

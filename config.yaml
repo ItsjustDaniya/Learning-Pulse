@@ -19,11 +19,11 @@ tabs:
     text_date_year: 2026   # year for text dates like "1 Sept " (September's manual export)
 
   # "Instructor-Rating - student-level-Lecture-level". Lecture_Clean reads 16,000 rows;
-  # 35 days was ~18,000 rows (Oct 2026), so last 30 days.
+  # 35 days was ~18,000 rows (Oct 2026), so last 29 days.
   Lecture_Dump:
     card_id: 11642
     mode: replace
-    date_param: {tag: Lecture_Date, days: 30}
+    date_param: {tag: Lecture_Date, days: 29}
 
   # "Subjective Feedback - Student:Instructor Mapping"
   Lecture_Feedback_Dump:
