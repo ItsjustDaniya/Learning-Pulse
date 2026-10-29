@@ -11,8 +11,11 @@ tabs:
   # NPS — "New-NPS-Query" (Altius). Returns all history, so only 2026 is kept.
   # append = adds only responses not already in the tab (one per student per month),
   # so the months loaded by hand stay as they are and missing months get filled in.
+  # PAUSED (card_id: null). Card 9452 returns every program (Adv+, Advantage, Xcelerate, legacy PCDS)
+  # with full course titles, but Raw_Dump holds the DS-only export keyed by Batch_Master names
+  # ("2026 45 September"). Appending it changed Feb-Sep NPS, so it's off until the card matches.
   Raw_Dump:
-    card_id: 9452
+    card_id: null   # was 9452
     mode: append
     key_columns: ["month:form_fill_date", user_id]
     keep_since: {column: form_fill_date, date: "2026-01-01"}
