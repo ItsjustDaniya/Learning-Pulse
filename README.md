@@ -1,7 +1,7 @@
 # Learning Pulse Live — daily sync
 
 A GitHub Actions cron that pulls Metabase questions into the dump tabs of
-[Learning Pulse Live](https://docs.google.com/spreadsheets/d/1hUPN7r_iLYPgVQq4JyUfP9Bz4nWj8zgmIUGlc_S5EkM/edit)
+[Learning Pulse Live](https://docs.google.com/spreadsheets/d/1kvCswOpip6dAqyIdr_l6vUdi6JC6k2vrQiSpzH6XYg0/edit)
 once a day at **06:47 IST**. Every other tab (Dashboard, MBR View, Slack Report, …) recalculates on its own.
 
 | Tab | Mode | What happens |
