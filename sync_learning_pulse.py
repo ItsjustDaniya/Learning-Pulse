@@ -238,9 +238,19 @@ def serial_to_date(v):
 
 
 # ---------------------------------------------------------------- sheet writes
-def ensure_size(ws, rows, cols):
-    if ws.row_count < rows or ws.col_count < cols:
-        ws.resize(rows=max(ws.row_count, rows), cols=max(ws.col_count, cols))
+def fit_to_grid(ws, tab, values, start_row=1):
+    """Never resize a dump tab. Adding rows/columns makes Google Sheets shift every *_Clean formula
+    that points past the old edge (Lecture_Clean row 13607 -> Lecture_Dump!A15936). The dump tabs are
+    pre-sized to what the Clean tabs read, so anything beyond the grid is dropped with a warning."""
+    max_rows = ws.row_count - start_row + 1
+    if len(values) > max_rows:
+        warn(f"{tab}: {len(values)} rows but the tab holds {max_rows} from row {start_row} — "
+             f"writing the first {max_rows}; narrow the query's date range")
+        values = values[:max_rows]
+    if values and len(values[0]) > ws.col_count:
+        warn(f"{tab}: {len(values[0])} columns but the tab has {ws.col_count} — extra columns dropped")
+        values = [r[:ws.col_count] for r in values]
+    return values
 
 
 def write_block(ws, start_row, values):
@@ -267,7 +277,7 @@ def do_replace(ws, tab, cols, rows, dry):
     note(f"{tab}: replace with {len(rows)} rows x {len(cols)} cols")
     if dry:
         return
-    ensure_size(ws, len(values) + 1, len(cols))
+    values = fit_to_grid(ws, tab, values)
     ws.batch_clear([f"A1:{gspread.utils.rowcol_to_a1(ws.row_count, ws.col_count)}"])
     write_block(ws, 1, values)
 
@@ -330,7 +340,9 @@ def do_append(ws, tab, cols, rows, key_cols, dry, text_year=None):
     note(f"{tab}: {len(rows)} rows in Metabase, {len(new_rows)} new to append after row {last_filled}")
     if not new_rows or dry:
         return
-    ensure_size(ws, last_filled + len(new_rows) + 1, len(header))
+    new_rows = fit_to_grid(ws, tab, new_rows, start_row=last_filled + 1)
+    if not new_rows:
+        return
     write_block(ws, last_filled + 1, new_rows)
 
 
